@@ -6,23 +6,20 @@ Button.beforeVisibility, Button.afterVisibility, Button.kit).
 
   CasterName            a FontString element: the caster's name from the
                         record's casterGUID (Emulated/Store.lua sets it)
-  AuraBorder            the 12.1.0 names: SetAuraBorder replaces every dispel
-                        texture with one; Get/Clear act on that set
-  AuraSymbol            the 12.1.0 names of the DispelTypeText methods
-  pandemic regions      a list of regions shown while inside the window (12.1.0:
-                        Add returns the index, duplicates allowed, Remove by
-                        region or index)
+  pandemic regions      a list of regions shown while inside the window
   animation families    PandemicEnter/Active/Leave, AuraAssigned, AuraShown:
-                        lists of AnimationGroups, 12.1.5 style (Add returns
-                        nothing and rejects a group already listed, Remove
-                        takes the group)
+                        lists of AnimationGroups
+                        Every list: Add returns nothing and rejects an element
+                        already listed, Remove takes the element
 
 PANDEMIC
-  The window is [expirationTime - 0.3 * duration, expirationTime): the last
-  30 % of the aura's duration, worked out from the held record alone (no
-  client reads, no cache: the same record always gives the same window, a
-  refreshed one moves it). timeMod is not applied (it is 1 for the
-  periodic effects pandemic concerns). It is only worked out while the button
+  The window is [expirationTime - carry-over, expirationTime). A client with
+  C_UnitAuras.GetRefreshCarryOverDuration is asked for the carry-over, as
+  retail asks, and an aura without one has no window. Elsewhere it is the last
+  30 % of the aura's duration, worked out from the held record alone (the
+  same record always gives the same window, a refreshed one moves it);
+  timeMod is not applied (it is 1 for the periodic effects pandemic
+  concerns). Nothing is cached. The window is only worked out while the button
   has a pandemic region or pandemic animation (nothing else can show it);
   the first one added joins silently, without animations.
   st.inPandemic is the state the last pass saw. The next edge (window start,
@@ -86,24 +83,6 @@ Button.DefineElement({
 	end,
 })
 
------------------------------------------------------------------- 12.1.0 names
-
-function methods:GetAuraBorder()
-	return methods.GetDispelTypeTexture(self, 1)
-end
-
-function methods:SetAuraBorder(texture, options)
-	kit.addDispelTexture(self, texture, options, "SetAuraBorder", true)
-end
-
-function methods:ClearAuraBorder()
-	methods.ClearDispelTypeTextures(self)
-end
-
-methods.GetAuraSymbol = methods.GetDispelTypeText
-methods.SetAuraSymbol = methods.SetDispelTypeText
-methods.ClearAuraSymbol = methods.ClearDispelTypeText
-
 ------------------------------------------------------------------ animation lists
 
 -- Families in the order their lists are named in the state; `pandemic` ones
@@ -153,15 +132,23 @@ local function hasPandemicDisplay(st)
 	return false
 end
 
--- The share of an aura's duration, at its end, that a refresh carries over.
+-- The share of an aura's duration, at its end, that a refresh carries over
+-- on a client that cannot be asked.
 local PANDEMIC_SHARE = 0.3
 
 -- Window start and end for the held aura, or nil.
-local function windowOf(aura)
+local function windowOf(unit, aura)
 	if aura == nil or aura.auraType == ENCHANT then return nil end
-	local ends, length = aura.expirationTime or 0, aura.duration or 0
-	if ends <= 0 or length <= 0 then return nil end
-	return ends - PANDEMIC_SHARE * length, ends
+	local ends = aura.expirationTime or 0
+	if ends <= 0 then return nil end
+	local carried
+	if C_UnitAuras.GetRefreshCarryOverDuration then
+		carried = C_UnitAuras.GetRefreshCarryOverDuration(unit, aura.auraInstanceID)
+	else
+		carried = PANDEMIC_SHARE * (aura.duration or 0)
+	end
+	if carried == nil or carried <= 0 then return nil end
+	return ends - carried, ends
 end
 
 local onEdge
@@ -171,7 +158,7 @@ local onEdge
 local function trackWindow(button, st)
 	local wasInside = st.inPandemic
 	local start, ends
-	if hasPandemicDisplay(st) then start, ends = windowOf(st.aura) end
+	if hasPandemicDisplay(st) then start, ends = windowOf(st.unit, st.aura) end
 	local now = GetTime()
 	local inside, nextEdge = false, nil
 	if start then
@@ -243,28 +230,22 @@ end
 
 ------------------------------------------------------------------ public methods
 
--- Returns the region's index; a region may be added twice.
+-- A region can be in the list once; returns nothing.
 function methods:AddPandemicRegion(region)
 	local ok, reason = checkRegion(self, region, "Region")
 	if not ok then reject("AddPandemicRegion", reason) end
 	local st = states[self]
-	local hadDisplay = hasPandemicDisplay(st)
 	local list = st.pandemicRegions
+	if find(list, region) then reject("AddPandemicRegion", "the region is already added") end
+	local hadDisplay = hasPandemicDisplay(st)
 	list[#list + 1] = region
 	joinPandemic(self, st, hadDisplay)
 	region:SetShown(st.inPandemic)
-	return #list
 end
 
--- An index removes that entry, a region its first occurrence.
-function methods:RemovePandemicRegion(regionOrIndex)
+function methods:RemovePandemicRegion(region)
 	local list = states[self].pandemicRegions
-	local at
-	if type(regionOrIndex) == "number" then
-		if list[regionOrIndex] ~= nil then at = regionOrIndex end
-	else
-		at = find(list, regionOrIndex)
-	end
+	local at = find(list, region)
 	if at then table.remove(list, at) end
 end
 

@@ -2,9 +2,8 @@
 
 The aura button our container hands out: an ordinary Button frame carrying the
 public button methods. It shows one aura record on the regions a
-consumer binds to it. The caster name,
-AuraBorder/AuraSymbol, pandemic and animation elements are added by
-Emulated/ButtonExtras.lua through the seam below.
+consumer binds to it. The caster name, pandemic and animation elements are
+added by Emulated/ButtonExtras.lua through the seam below.
 
 INTERFACE (Private.Button), for the container
 
@@ -62,8 +61,8 @@ SEAM (for Emulated/ButtonExtras.lua, loaded right after this file)
   Button.afterVisibility   list of function(button, st, wasShown), run last;
                            wasShown is IsShown() from before the pass
   Button.kit               states, checkRegion, descendsFrom, reject,
-                           readOptions, boolean, addDispelTexture (shared with
-                           the public methods); the option checkers number,
+                           readOptions, boolean (shared with the public
+                           methods); the option checkers number,
                            text, asset, record, clientEnum (also used by
                            Emulated/Tooltip.lua)
 
@@ -776,44 +775,30 @@ function methods:GetDispelTypeTexture(index)
 	if entry then return entry.region, copyValue(entry.options) end
 end
 
--- Checks the arguments for `method` (errors at its caller), then appends the
--- texture, after dropping every other one when `replace` is set, and
--- returns its index.
-local function addDispelTexture(self, texture, options, method, replace)
+local function findDispelTexture(list, texture)
+	for i, entry in ipairs(list) do
+		if entry.region == texture then return i end
+	end
+end
+
+-- A texture can be in the list once; returns nothing.
+function methods:AddDispelTypeTexture(texture, options)
 	local st = states[self]
 	local ok, reason = checkRegion(self, texture, "Texture")
-	if not ok then reject(method, reason, 1) end
+	if not ok then reject("AddDispelTypeTexture", reason) end
 	local o
 	ok, o = readOptions(DISPEL_TEXTURE, options)
-	if not ok then reject(method, o, 1) end
-	if replace then st.dispelTextures = {} end
+	if not ok then reject("AddDispelTypeTexture", o) end
 	local list = st.dispelTextures
+	if findDispelTexture(list, texture) then reject("AddDispelTypeTexture", "the texture is already added") end
 	local entry = { region = texture, options = o }
 	list[#list + 1] = entry
 	showDispelTexture(st, entry)
-	return #list
 end
 
--- Returns the new entry's index; the same texture may be added twice.
-function methods:AddDispelTypeTexture(texture, options)
-	local index = addDispelTexture(self, texture, options, "AddDispelTypeTexture")
-	return index
-end
-
--- An index removes that entry, a texture its first occurrence.
-function methods:RemoveDispelTypeTexture(textureOrIndex)
+function methods:RemoveDispelTypeTexture(texture)
 	local list = states[self].dispelTextures
-	local at
-	if type(textureOrIndex) == "number" then
-		if list[textureOrIndex] then at = textureOrIndex end
-	else
-		for i, entry in ipairs(list) do
-			if entry.region == textureOrIndex then
-				at = i
-				break
-			end
-		end
-	end
+	local at = findDispelTexture(list, texture)
 	if at then table.remove(list, at) end
 end
 
@@ -889,7 +874,7 @@ end
 Button.onNew = {}
 Button.kit = {
 	states = states, checkRegion = checkRegion, descendsFrom = descendsFrom, reject = reject,
-	readOptions = readOptions, boolean = boolean, addDispelTexture = addDispelTexture,
+	readOptions = readOptions, boolean = boolean,
 	-- option checkers, also used by the tooltip style setters (Emulated/Tooltip.lua)
 	number = number, text = text, asset = asset, record = record, clientEnum = clientEnum,
 }

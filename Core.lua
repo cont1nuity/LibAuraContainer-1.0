@@ -46,7 +46,7 @@ PRIVATE NAMESPACE (every library file follows this)
   (the emulated constructor, provided by Emulated/Container.lua).
 ]]
 
-local MAJOR, MINOR = "LibAuraContainer-1.0", 6
+local MAJOR, MINOR = "LibAuraContainer-1.0", 7
 local PRIVATE_MAJOR = MAJOR .. "-Private"
 
 local LAC = LibStub:NewLibrary(MAJOR, MINOR)

@@ -5,12 +5,11 @@ classic clients too. Create containers through the library and use Blizzard's AP
 
 | client | what `LAC:CreateContainer` returns |
 |---|---|
-| retail 12.1.0, 12.1.5, WoW Forever | Blizzard's native `CustomAuraContainerTemplate` container, untouched |
+| retail 12.1.5, WoW Forever | Blizzard's native `CustomAuraContainerTemplate` container, untouched |
 | MoP Classic, TBC Anniversary, Classic Era | the library's own implementation, driven by `UNIT_AURA` |
 
 The backend is chosen once at load, by whether the client knows Blizzard's template, never by
-build number. The classic container accepts the union of the 12.1.0 and 12.1.5 APIs and
-behaves like 12.1.5 where they differ.
+build number. The classic container has the API of the 12.1.5 container and behaves like it.
 
 ## Embedding
 
@@ -47,7 +46,7 @@ Classic lacks some of the APIs the retail container uses, so a few things behave
   Classic only lets secure code cancel auras and weapon enchants.
 - **Pandemic window:** the last 30 % of the aura's duration, worked out from the aura's own
   times, for every aura with an expiry (retail opens one only for auras that have pandemic).
-- **Element indices:** `AddDispelTypeTexture` and `AddPandemicRegion` also return 12.1.0's index.
+  A client that has `C_UnitAuras.GetRefreshCarryOverDuration` is asked instead, as on retail.
 - **Unit swaps:** classic sends no `UNIT_AURA` when a unit token comes to name another unit (a
   new target, say); the container watches the events that re-point its unit and compares the
   unit's GUID instead.
